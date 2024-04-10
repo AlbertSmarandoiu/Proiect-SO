@@ -89,3 +89,25 @@ int main(int argc, char *argv[]) {
 
     return EXIT_SUCCESS;
 }
+
+
+
+int main(int argc ,char *argv[]){
+
+    //verificam cate argumnete sunt in linia de comanda
+    if(argc > 12){
+        printf("Prea multe argumente in linia de cp,amda");
+        exit(EXIT_FAILURE);
+    }
+    
+    if(argc < 3){
+        printf("prea putine argumente");
+    }
+
+
+
+
+    return 0;
+}
+
+
