@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/sysmacros.h>
+
+#define MAX_ENTRIES 1000
+#define MAX_ARGS 10
+
+struct MetodaSnapShot
+{
+    char name[256];
+    time_t ultima_modificare;
+    mode_t mode;
+};
+
+void takeSnapshot(const char *path) {
+    struct MetodaSnapShot snapshot[MAX_ENTRIES];
+    int count = 0;
+
+    DIR *dir;
+    struct dirent *entry;
+    struct stat info;
+
+    dir = opendir(path);
+    if (!dir) {
+        printf("Eroare la deschiderea directorului %s\n", path);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL && count < MAX_ENTRIES) {
+        char full_path[PATH_MAX];
+        snprintf(full_path, PATH_MAX, "%s/%s", path, entry->d_name);
+
+        if (lstat(full_path, &info) == -1) {
+            printf("Eroare la obținerea informațiilor despre %s\n", full_path);
+            continue;
+        }
+
+        strcpy(snapshot[count].name, entry->d_name);
+        snapshot[count].ultima_modificare = info.st_mtime;
+        snapshot[count].mode = info.st_mode;
+
+        count++;
+    }
+
+    closedir(dir);
+
+    printf("Snapshot pentru %s:\n", path);
+    for (int i = 0; i < count; i++) {
+        printf("Nume: %s, Ultima modificare: %s, Mode: %o\n", snapshot[i].name, ctime(&snapshot[i].ultima_modificare), snapshot[i].mode);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2 || argc > MAX_ARGS) {
+        printf("Utilizare: %s [director1] [director2] ... (maxim %d directoare/fișiere)\n", argv[0], MAX_ARGS - 1);
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 1; i < argc; i++) {
+        takeSnapshot(argv[i]);
+    }
+
+    return 0;
+}
