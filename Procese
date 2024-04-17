@@ -1,0 +1,133 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <time.h>
+
+#define MAX_ENTRIES 1000
+#define MAX_ARGS 10
+
+// Structura pentru stocarea metadatelor fiecărei intrări (fișier/director)
+struct Metadata {
+    char name[256];
+    time_t last_modified;
+    mode_t mode;
+};
+
+
+void update_snapshot(const char *dir_path) {
+    DIR *dir = opendir(dir_path);
+    if (dir == NULL) {
+        perror("opendir");
+        exit(EXIT_FAILURE);
+    }
+
+    
+    struct Metadata metadata[MAX_ENTRIES];
+    int num_entries = 0;
+
+
+    printf("Snapshot Contents for directory %s:\n", dir_path);
+    while (num_entries < MAX_ENTRIES) {
+        struct dirent *entry = readdir(dir);
+        if (entry == NULL)
+            break;
+
+        // Ignorăm intrările implicite "." și ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+
+        char entry_path[512];
+        snprintf(entry_path, sizeof(entry_path), "%s/%s", dir_path, entry->d_name);
+
+
+        struct stat entry_stat;
+        if (lstat(entry_path, &entry_stat) == -1) {
+            perror("lstat");
+            closedir(dir);
+            exit(EXIT_FAILURE);
+        }
+
+        
+        strcpy(metadata[num_entries].name, entry->d_name);
+        metadata[num_entries].last_modified = entry_stat.st_mtime;
+        metadata[num_entries].mode = entry_stat.st_mode;
+
+        // aici se afiseaza metodee
+        printf("Name: %s\n", metadata[num_entries].name);
+        printf("Last Modified: %s", ctime(&metadata[num_entries].last_modified)); // Convertim timpul in string pentru afisare
+        printf("Mode: %o\n\n", metadata[num_entries].mode); // Afișăm modul ca un număr octal
+
+        num_entries++;
+    }
+
+    // Închidem directorul
+    closedir(dir);
+
+    // Deschidem fișierul snapshot.bin 
+    snprintf(snapshot_file_path, sizeof(snapshot_file_path), "%s/snapshot.bin", dir_path);
+    int fd = open(snapshot_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    // Scriem metadatele în fișierul snapshot.bin
+    if (write(fd, metadata, num_entries * sizeof(struct Metadata)) == -1) {
+        perror("write");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    
+    close(fd);
+}
+
+int main(int argc, char *argv[]) {
+    int output_flag = 0; // Flag pentru a verifica prezența argumentului "-o"
+
+    // Parcurgem argumentele pentru a verifica prezența argumentului "-o"
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-o") == 0) {
+            output_flag = 1;
+            break;
+        }
+    }
+
+
+    
+    if (output_flag) {
+        // Dacă există argumentul "-o", ignorăm restul argumentelor
+        if (argc != 3) {
+            fprintf(stderr, "Usage: %s -o <directory>\n", argv[0]);
+            return EXIT_FAILURE;
+        }
+
+        const char *dir_path = argv[2];
+        printf("Updating snapshot for directory: %s\n", dir_path);
+        update_snapshot(dir_path);
+    } else {
+        // Dacă nu există argumentul "-o", procesăm toate argumentele ca directoare
+        if (argc < 2 || argc > MAX_ARGS + 1) {
+            fprintf(stderr, "Usage: %s <directory1> <directory2> ... <directory%d>\n", argv[0], MAX_ARGS);
+            return EXIT_FAILURE;
+        }
+
+        // Parcurgem toate argumentele și apelăm funcția update_snapshot pentru directoarele valide
+        for (int i = 1; i < argc; i++) {
+            struct stat st;
+            if (stat(argv[i], &st) == -1 || !S_ISDIR(st.st_mode)) {
+                fprintf(stderr, "Ignoring non-directory argument: %s\n", argv[i]);
+                continue;
+            }
+            printf("Updating snapshot for directory: %s\n", argv[i]);
+            update_snapshot(argv[i]);
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
